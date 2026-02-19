@@ -1,0 +1,692 @@
+import React, { useState, useEffect, useRef } from 'react';
+import './MainPage.css';
+
+// FAQ Item Component
+const FaqItem = ({ question, answer }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <div className={`faq-item-expandable ${isOpen ? 'open' : ''}`}>
+      <button className="faq-question-btn" onClick={() => setIsOpen(!isOpen)}>
+        <span className="faq-question-text">{question}</span>
+        <span className="faq-toggle-icon">{isOpen ? '−' : '+'}</span>
+      </button>
+      {isOpen && (
+        <div className="faq-answer-content">
+          <p>{answer}</p>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// CountUp Animation Component
+const CountUp = ({ end, duration = 2, decimals = 0 }) => {
+  const [count, setCount] = useState(0);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const countRef = useRef(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !hasAnimated) {
+          setHasAnimated(true);
+          const startTime = Date.now();
+          const animate = () => {
+            const elapsed = (Date.now() - startTime) / 1000;
+            if (elapsed < duration) {
+              const easeOutQuart = 1 - Math.pow(1 - elapsed / duration, 4);
+              setCount(end * easeOutQuart);
+              requestAnimationFrame(animate);
+            } else {
+              setCount(end);
+            }
+          };
+          animate();
+        }
+      },
+      { threshold: 0.5 }
+    );
+    if (countRef.current) observer.observe(countRef.current);
+    return () => observer.disconnect();
+  }, [end, duration, hasAnimated]);
+
+  return (
+    <span ref={countRef}>
+      {decimals > 0 ? count.toFixed(decimals) : Math.floor(count)}
+    </span>
+  );
+};
+
+// ── Modal Overlay ──
+const BentoModal = ({ tile, onClose }) => {
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    const handleKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="bento-modal-backdrop" onClick={onClose}>
+      <div
+        className="bento-modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ '--modal-accent': tile.accent }}
+      >
+        <button className="bento-modal__close" onClick={onClose}>✕</button>
+        <div className="bento-modal__header">
+          <div className="bento-modal__tag" style={{ background: tile.accent }}>{tile.tag}</div>
+          <h2 className="bento-modal__title">{tile.modalTitle || tile.title}</h2>
+          <p className="bento-modal__subtitle">{tile.modalSubtitle || tile.subtitle}</p>
+        </div>
+        <div className="bento-modal__body">
+          {tile.modalContent}
+        </div>
+        <div className="bento-modal__footer">
+          {tile.cta && (
+            <a
+              href={tile.ctaHref || '#'}
+              className="bento-modal__cta"
+              style={{ background: tile.accent }}
+              onClick={(e) => { if (!tile.ctaHref?.startsWith('http')) { e.preventDefault(); onClose(); const el = document.querySelector(tile.ctaHref); if (el) el.scrollIntoView({ behavior: 'smooth' }); } }}
+            >
+              {tile.cta} →
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const MainPage = () => {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
+  const [activeTile, setActiveTile] = useState(null);
+
+  useEffect(() => {
+    const handleScroll = () => setIsScrolled(window.pageYOffset > 50);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('animate-in'); }),
+      { threshold: 0.1, rootMargin: '0px 0px -100px 0px' }
+    );
+    document.querySelectorAll('.scroll-animate').forEach(el => observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  const toggleMenu = () => setIsMenuOpen(!isMenuOpen);
+
+  const handleNavClick = (e, target) => {
+    e.preventDefault();
+    setIsMenuOpen(false);
+    const element = document.querySelector(target);
+    if (element) window.scrollTo({ top: element.offsetTop - 80, behavior: 'smooth' });
+  };
+
+  const handleDemoSubmit = (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) { alert('Please enter a valid email address'); return; }
+    if (!/^[\d\s\-\+\(\)]{10,}$/.test(data.phone)) { alert('Please enter a valid phone number'); return; }
+    alert('Thank you for your interest! We will contact you within 24 hours.');
+    e.target.reset();
+  };
+
+  // ── BENTO TILE DATA ──
+  const bentoTiles = [
+    {
+      id: 'join',
+      tag: 'Community',
+      accent: '#1A1200',
+      size: 'wide',             // spans 2 cols
+      title: 'Join Fermont KIDS',
+      subtitle: 'Whether you\'re a parent, entrepreneur, or educator — there\'s a place for you here.',
+      preview: (
+        <div className="bt-preview bt-preview--join">
+          <div className="bt-pill">👨‍👩‍👧 Parent</div>
+          <div className="bt-pill bt-pill--dark">🏫 Franchise</div>
+          <div className="bt-pill">👨‍🏫 Educator</div>
+        </div>
+      ),
+      modalTitle: 'Join Fermont KIDS',
+      modalSubtitle: 'Find the right path for you below.',
+      cta: 'Schedule a Call',
+      ctaHref: '#book-demo',
+      modalContent: (
+        <div className="modal-join-grid">
+          <div className="modal-join-card">
+            <div className="modal-join-icon">👨‍👩‍👧</div>
+            <h3>I am a Parent</h3>
+            <p>Enroll your child in a premium, research-backed early learning experience tailored for ages 2–6.</p>
+            <ul className="modal-list">
+              <li>4 age-specific programs</li>
+              <li>10:1 student-teacher ratio</li>
+              <li>STEAM, Literacy & Numeracy pathways</li>
+              <li>Safe, GPS-enabled transport</li>
+            </ul>
+            <a href="#book-demo" className="modal-join-btn" style={{ background: '#1A1200' }}>Get Started →</a>
+          </div>
+          <div className="modal-join-card modal-join-card--dark">
+            <div className="modal-join-icon">🏫</div>
+            <h3>Become a Franchise Partner</h3>
+            <p>Own your school. Build your success story with AI-powered systems and a proven curriculum framework.</p>
+            <ul className="modal-list modal-list--light">
+              <li>₹30–50 lakh initial investment</li>
+              <li>25–35% expected annual ROI</li>
+              <li>18–24 month break-even</li>
+              <li>Full AI + curriculum support</li>
+            </ul>
+            <a href="/franchise" className="modal-join-btn" style={{ background: 'rgba(255,255,255,0.2)', border: '1.5px solid rgba(255,255,255,0.4)' }}>Apply Now →</a>
+          </div>
+          <div className="modal-join-card">
+            <div className="modal-join-icon">👨‍🏫</div>
+            <h3>I am an Educator</h3>
+            <p>Join a team that values pedagogy, innovation, and a child-first teaching philosophy.</p>
+            <ul className="modal-list">
+              <li>Structured training programs</li>
+              <li>Research-backed teaching tools</li>
+              <li>Collaborative, supportive team</li>
+              <li>Professional growth path</li>
+            </ul>
+            <a href="#contact" className="modal-join-btn" style={{ background: '#1A1200' }}>Join Us →</a>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'about',
+      tag: 'About Us',
+      accent: '#B8860B',
+      size: 'tall',             // spans 2 rows
+      title: 'Structured Early Learning',
+      subtitle: 'For Consistent Growth',
+      preview: (
+        <div className="bt-preview bt-preview--about">
+          <div className="bt-about-stat"><span>4</span><small>Frameworks</small></div>
+          <div className="bt-about-stat"><span>500+</span><small>Families</small></div>
+        </div>
+      ),
+      modalTitle: 'Structured Early Learning for Consistent Growth',
+      modalSubtitle: 'A standardised approach that nurtures essential skills through research-backed curriculum pathways.',
+      cta: 'Explore Programs',
+      ctaHref: '#programs',
+      modalContent: (
+        <div className="modal-about-grid">
+          {[
+            { img: '/holistic_dvp.png', title: 'Holistic Development Framework', desc: 'Balancing academics, creativity, and emotional growth within nurturing, exploratory environments.' },
+            { img: '/ai_enabled.png', title: 'AI-Enabled Preschool Operations', desc: 'Advanced automation for communication, scheduling, and monitoring — so you focus on what matters most.' },
+            { img: '/research_backed.png', title: 'Research-Backed Curriculum Pathways', desc: 'Structured learning stages validated by early education experts and global best practices.' },
+            { img: '/future_ready.png', title: 'Future-Ready Skills & Confidence Building', desc: 'Building independence, resilience, and foundational skills for primary school success.' },
+          ].map((item, i) => (
+            <div key={i} className="modal-about-card">
+              <div className="modal-about-img">
+                <img src={item.img} alt={item.title} />
+              </div>
+              <h4>{item.title}</h4>
+              <p>{item.desc}</p>
+            </div>
+          ))}
+          <div className="modal-about-stat-row">
+            <div className="modal-stat-box"><span>500+</span><p>Families trust FermontKIDS</p></div>
+            <div className="modal-stat-box"><span>4</span><p>Age-specific programs</p></div>
+            <div className="modal-stat-box"><span>100%</span><p>Curriculum support</p></div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'programs',
+      tag: 'Programs',
+      accent: '#1A1200',
+      size: 'normal',
+      title: 'Structure. Progress. Grow.',
+      subtitle: 'Age-based learning from 2 to 6 years.',
+      preview: (
+        <div className="bt-preview bt-preview--programs">
+          {['Little Lumos', 'LaunchLIT', 'VIVIDThinkers', 'SUMMITScholars'].map((n, i) => (
+            <div key={i} className="bt-program-dot">{n[0]}</div>
+          ))}
+        </div>
+      ),
+      modalTitle: 'Structure. Progress. Grow.',
+      modalSubtitle: 'Our age-based learning framework ensures consistent early childhood development across all FermontKIDS centres.',
+      cta: 'Book a Campus Visit',
+      ctaHref: '#book-demo',
+      modalContent: (
+        <div className="modal-programs-grid">
+          {[
+            { age: '2–3 Years', name: 'Little Lumos', focus: 'Building Expression & Intellectual Curiosity', desc: 'Through gentle exploration and engagement', img: '/littlelumous1.png', color: '#D1E3E1' },
+            { age: '3–4 Years', name: 'LaunchLIT', focus: 'Cultivating Early Academic Readiness & Wonder', desc: 'Through foundational literacy and numeracy skills', img: '/launchlit1.png', color: '#B8D4D1' },
+            { age: '4–5 Years', name: 'VIVIDThinkers', focus: 'Developing Confidence & Advanced Thinking', desc: 'Through inquiry, problem-solving, and critical thinking', img: '/vividthinkers1.png', color: '#9FC5C1' },
+            { age: '5–6 Years', name: 'SUMMITScholars', focus: 'Preparing for Primary School Endeavors', desc: 'Through advanced literacy, numeracy, and readiness', img: '/summitscholars1.png', color: '#8AB3AF' },
+          ].map((p, i) => (
+            <div key={i} className="modal-program-card">
+              <div className="modal-program-header" style={{ background: p.color }}>
+                <span className="modal-program-age">{p.age}</span>
+                <img src={p.img} alt={p.name} />
+                <h3>{p.name}</h3>
+              </div>
+              <div className="modal-program-body">
+                <h4>{p.focus}</h4>
+                <p>{p.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
+      id: 'curriculum',
+      tag: 'Curriculum',
+      accent: '#B8860B',
+      size: 'normal',
+      title: 'A Curriculum That Nurtures',
+      subtitle: 'Every Child\'s Potential',
+      preview: (
+        <div className="bt-preview bt-preview--curriculum">
+          <div className="bt-cur-item">🔬 STEAM</div>
+          <div className="bt-cur-item">📖 Literacy</div>
+          <div className="bt-cur-item">🔢 Numeracy</div>
+        </div>
+      ),
+      modalTitle: 'A Curriculum That Nurtures Every Child\'s Potential',
+      modalSubtitle: 'Our research-backed curriculum guides each child through crucial developmental milestones in an inspiring and engaging way.',
+      cta: 'Explore Curriculum',
+      ctaHref: '#programs',
+      modalContent: (
+        <div className="modal-curriculum-wrap">
+          {[
+            { img: '/steam.png', title: 'STEAM Discovery Pathway', desc: 'Cultivates critical thinking, scientific curiosity, and creative problem-solving through hands-on experiments and engineering challenges. Children learn to ask questions, test ideas, and explore outcomes.', tags: ['Science', 'Technology', 'Engineering', 'Art', 'Math'] },
+            { img: '/literacy.png', title: 'Literacy & Language Pathway', desc: 'Encourages reading, language, and communication through storytelling, phonics, vocabulary building, and expressive activities. Every child finds their voice.', tags: ['Phonics', 'Reading', 'Storytelling', 'Expression'] },
+            { img: '/numeracy.png', title: 'Numeracy Skills Pathway', desc: 'Fosters a strong foundation in early math concepts through patterns, counting, spatial reasoning, and logic games designed for young minds.', tags: ['Counting', 'Patterns', 'Logic', 'Spatial Reasoning'] },
+          ].map((c, i) => (
+            <div key={i} className="modal-curriculum-item">
+              <div className="modal-curriculum-img">
+                <img src={c.img} alt={c.title} />
+              </div>
+              <div className="modal-curriculum-text">
+                <h3>{c.title}</h3>
+                <p>{c.desc}</p>
+                <div className="modal-curriculum-tags">
+                  {c.tags.map((t, j) => <span key={j} className="modal-tag">{t}</span>)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+  ];
+
+  const programs = [
+    { age: '2-3 Years', name: 'Little Lumos', focus: 'Building Expression & Intellectual Curiosity', description: 'through gentle exploration and engagement', bgColor: '#D1E3E1', image: '/littlelumous1.png' },
+    { age: '3-4 Years', name: 'LaunchLIT', focus: 'Cultivating Early Academic Readiness & Wonder', description: 'through foundational literacy and numeracy skills', bgColor: '#B8D4D1', image: '/launchlit1.png' },
+    { age: '4-5 Years', name: 'VIVIDThinkers', focus: 'Developing Confidence & Advanced Thinking', description: 'through inquiry, problem-solving, and critical thinking activities', bgColor: '#9FC5C1', image: '/vividthinkers1.png' },
+    { age: '5-6 Years', name: 'SUMMITScholars', focus: 'Preparing for Primary School Endeavors', description: 'through advanced literacy, numeracy, and readiness studies', bgColor: '#8AB3AF', image: '/summitscholars1.png' },
+  ];
+
+  const features = [
+    { image: '/steam.png', title: 'STEAM Discovery Pathway', description: 'Cultivates critical thinking and problem-solving skills' },
+    { image: '/literacy.png', title: 'Literacy & Language Pathway', description: 'Encourages reading, language and communication' },
+    { image: '/numeracy.png', title: 'Numeracy Skills Pathway', description: 'Fosters a strong foundation in early math concepts' },
+  ];
+
+  const activeTileData = bentoTiles.find(t => t.id === activeTile);
+
+  return (
+    <div className="main-page">
+      {/* ── MODAL ── */}
+      {activeTileData && (
+        <BentoModal tile={activeTileData} onClose={() => setActiveTile(null)} />
+      )}
+
+      <nav className={`navbar ${isScrolled ? 'scrolled' : ''}`}>
+        <div className="container nav-container">
+          <div className="logo">
+            <img src="/fermontlogo.png" alt="Fermont Kids Logo" className="logo-img" />
+          </div>
+          <ul className={`nav-menu ${isMenuOpen ? 'active' : ''}`}>
+            <li><a href="#home" onClick={(e) => handleNavClick(e, '#home')}>Home</a></li>
+            <li><a href="/about">About Us</a></li>
+            <li><a href="/founders-desk">Founder's Desk</a></li>
+            <li><a href="#programs" onClick={(e) => handleNavClick(e, '#programs')}>Programs</a></li>
+            <li><a href="#admissions" onClick={(e) => handleNavClick(e, '#book-demo')}>Admissions</a></li>
+            <li><a href="/franchise">Franchise</a></li>
+            <li><a href="#faqs" onClick={(e) => handleNavClick(e, '#faqs')}>FAQs</a></li>
+            <li><a href="#contact" onClick={(e) => handleNavClick(e, '#contact')}>Contact</a></li>
+          </ul>
+          <div className="nav-actions">
+            <a href="#book-demo" className="btn btn-primary" onClick={(e) => handleNavClick(e, '#book-demo')}>Schedule a Call</a>
+          </div>
+          <div className={`hamburger ${isMenuOpen ? 'active' : ''}`} onClick={toggleMenu}>
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+      </nav>
+
+      <section className="hero" id="home">
+        <div className="container">
+          <div className="hero-content">
+            <div className="hero-left scroll-animate">
+              <h1 className="hero-title">
+                <span className="hero-title-light">Early Learning Built on</span><br />
+                <span className="hero-title-bold">Systems, Excellence & Care.</span>
+              </h1>
+              <p className="hero-subtitle">AI-powered operations. Research-backed curriculum.<br />Designed for scalable preschool growth.</p>
+              <div className="hero-buttons">
+                <a href="#franchise" className="btn btn-primary btn-large btn-hover-lift" onClick={(e) => handleNavClick(e, '#franchise')}>Start a Franchise</a>
+                <a href="#programs" className="btn btn-secondary btn-large btn-hover-lift" onClick={(e) => handleNavClick(e, '#programs')}>Explore Curriculum</a>
+              </div>
+              <div className="hero-stats">
+                <div className="stat-item">
+                  <h3>2–6</h3>
+                  <p>Years Focus</p>
+                </div>
+                <div className="stat-item">
+                  <h3>100%</h3>
+                  <p>Curriculum Support</p>
+                </div>
+                <div className="stat-item">
+                  <h3>AI</h3>
+                  <p>Enabled Operations</p>
+                </div>
+              </div>
+            </div>
+            <div className="hero-right scroll-animate">
+              <div className="hero-image-wrapper">
+                <img src="/kids.png" alt="Happy Fermont Kids Students" className="hero-image" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="ai-section">
+        <div className="container">
+          <div className="ai-content">
+            <div className="ai-left">
+              <h2 className="ai-title">AI That Simplifies School Operations</h2>
+              <p className="ai-description">Our advanced AI system automates daily administrative tasks, streamlining operations so you can focus on growth.</p>
+              <div className="ai-features-list">
+                <div className="ai-feature-item">
+                  <div className="ai-feature-icon">📞</div>
+                  <div className="ai-feature-text"><h4>24/7 Parent Communication</h4><p>Instantly handle parent calls & messages round-the-clock</p></div>
+                </div>
+                <div className="ai-feature-item">
+                  <div className="ai-feature-icon">📅</div>
+                  <div className="ai-feature-text"><h4>Smart Scheduling</h4><p>Automates tours, parent meetings, and calendar tasks</p></div>
+                </div>
+                <div className="ai-feature-item">
+                  <div className="ai-feature-icon">📊</div>
+                  <div className="ai-feature-text"><h4>Lead Management Automation</h4><p>Tracks & manages leads from inquiry to enrollment</p></div>
+                </div>
+              </div>
+              <div className="ai-learn-more">
+                <a href="#franchise" className="ai-link" onClick={(e) => handleNavClick(e, '#franchise')}>
+                  Learn More About Our AI System <span className="arrow">→</span>
+                </a>
+              </div>
+            </div>
+            <div className="ai-right">
+              <div className="ai-laptop-wrapper scroll-animate">
+                <img src="/laptop.png" alt="AI System Demo" className="ai-laptop-image" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════
+          UNIFIED BENTO SHOWCASE
+      ════════════════════════════════════════ */}
+      <section className="bento-showcase" id="explore">
+        <div className="container">
+          <div className="bento-showcase__header scroll-animate">
+            <p className="bento-showcase__eyebrow">Everything FermontKIDS</p>
+            <h2 className="bento-showcase__title">One Platform.<br />Every Dimension of Early Education.</h2>
+            <p className="bento-showcase__sub">Click any card to explore the details.</p>
+          </div>
+
+          <div className="bento-grid scroll-animate">
+
+            {/* TILE 1 — Join (wide, top-left, spans 2 cols) */}
+            <button
+              className="bento-tile bento-tile--join bento-tile--wide"
+              onClick={() => setActiveTile('join')}
+              aria-label="Join Fermont KIDS"
+            >
+              <div className="bento-tile__tag" style={{ background: '#1A1200' }}>Community</div>
+              <div className="bento-tile__expand">↗</div>
+              <div className="bento-tile__text">
+                <h3>Join Fermont KIDS</h3>
+                <p>Parent, franchise, or educator — find your path.</p>
+              </div>
+              <div className="bento-tile__preview">
+                <div className="bt-pill">👨‍👩‍👧 Parent</div>
+                <div className="bt-pill bt-pill--dark">🏫 Franchise</div>
+                <div className="bt-pill">👨‍🏫 Educator</div>
+              </div>
+            </button>
+
+            {/* TILE 2 — About (tall, top-right, spans 2 rows) */}
+            <button
+              className="bento-tile bento-tile--about bento-tile--tall"
+              onClick={() => setActiveTile('about')}
+              aria-label="Structured Early Learning"
+            >
+              <div className="bento-tile__tag" style={{ background: '#B8860B' }}>About Us</div>
+              <div className="bento-tile__expand">↗</div>
+              <div className="bento-tile__text">
+                <h3>Structured Early Learning</h3>
+                <p>For Consistent Growth</p>
+              </div>
+              <div className="bento-tile__preview bento-tile__preview--about">
+                <div className="bt-about-stat"><span>500+</span><small>Families</small></div>
+                <div className="bt-about-stat"><span>4</span><small>Frameworks</small></div>
+                <div className="bt-about-stat"><span>100%</span><small>Support</small></div>
+              </div>
+            </button>
+
+            {/* TILE 3 — Programs (bottom-left) */}
+            <button
+              className="bento-tile bento-tile--programs"
+              onClick={() => setActiveTile('programs')}
+              aria-label="Programs"
+            >
+              <div className="bento-tile__tag" style={{ background: '#1A1200' }}>Programs</div>
+              <div className="bento-tile__expand">↗</div>
+              <div className="bento-tile__text">
+                <h3>Structure. Progress. Grow.</h3>
+                <p>Age-based learning from 2 to 6 years.</p>
+              </div>
+              <div className="bento-tile__preview bento-tile__preview--programs">
+                {['LL', 'LIT', 'VT', 'SS'].map((l, i) => (
+                  <div key={i} className="bt-dot">{l}</div>
+                ))}
+              </div>
+            </button>
+
+            {/* TILE 4 — Curriculum (bottom-middle) */}
+            <button
+              className="bento-tile bento-tile--curriculum"
+              onClick={() => setActiveTile('curriculum')}
+              aria-label="Curriculum"
+            >
+              <div className="bento-tile__tag" style={{ background: '#B8860B' }}>Curriculum</div>
+              <div className="bento-tile__expand">↗</div>
+              <div className="bento-tile__text">
+                <h3>A Curriculum That Nurtures</h3>
+                <p>Every Child's Potential</p>
+              </div>
+              <div className="bento-tile__preview bento-tile__preview--curriculum">
+                <div className="bt-cur-badge">🔬 STEAM</div>
+                <div className="bt-cur-badge">📖 Literacy</div>
+                <div className="bt-cur-badge">🔢 Numeracy</div>
+              </div>
+            </button>
+
+          </div>
+        </div>
+      </section>
+
+      {/* ── BOOK DEMO ── */}
+      <section className="book-demo-section" id="book-demo">
+        <div className="container">
+          <div className="demo-header">
+            <h2 className="section-title">Start Learning & Define Your Future</h2>
+            <p className="section-subtitle">With programs designed for each stage of early childhood development</p>
+          </div>
+          <div className="demo-content-wrapper">
+            <div className="demo-left-content">
+              <h3>Why Schedule a Call?</h3>
+              <p className="demo-intro">Connect with us to explore how FermontKIDS can nurture your child's potential through thoughtful, research-backed early education.</p>
+              <div className="demo-benefits-list">
+                <div className="demo-benefit-item"><div className="demo-benefit-icon">👶</div><div className="demo-benefit-text"><h4>Personalized Guidance</h4><p>Get expert advice tailored to your child's age and developmental needs</p></div></div>
+                <div className="demo-benefit-item"><div className="demo-benefit-icon">🏫</div><div className="demo-benefit-text"><h4>Campus Tour</h4><p>Experience our nurturing environment and age-appropriate learning spaces</p></div></div>
+                <div className="demo-benefit-item"><div className="demo-benefit-icon">📚</div><div className="demo-benefit-text"><h4>Curriculum Overview</h4><p>Understand our research-backed learning pathways and holistic approach</p></div></div>
+                <div className="demo-benefit-item"><div className="demo-benefit-icon">💼</div><div className="demo-benefit-text"><h4>Franchise Opportunities</h4><p>Learn about building a successful preschool with our proven systems</p></div></div>
+              </div>
+              <div className="demo-trust-section">
+                <p className="trust-text">Join 500+ families who trust FermontKIDS for their child's early learning journey</p>
+              </div>
+            </div>
+            <div className="demo-form-wrapper">
+              <form className="demo-form" onSubmit={handleDemoSubmit}>
+                <h3>Get Started Today</h3>
+                <div className="form-row">
+                  <div className="form-group"><label>Your Name</label><input type="text" name="name" placeholder="Enter your name" required /></div>
+                  <div className="form-group"><label>Email Address</label><input type="email" name="email" placeholder="your.email@example.com" required /></div>
+                </div>
+                <div className="form-row">
+                  <div className="form-group"><label>Phone Number</label><input type="tel" name="phone" placeholder="+91 XXXXX XXXXX" required /></div>
+                  <div className="form-group"><label>City</label><input type="text" name="city" placeholder="Your city" required /></div>
+                </div>
+                <div className="form-group">
+                  <label>I am interested as</label>
+                  <select name="user_type" required>
+                    <option value="">Select an option</option>
+                    <option value="parent">Parent looking for admission</option>
+                    <option value="franchise">Franchise partnership opportunity</option>
+                    <option value="educator">Educator seeking to join</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Message (Optional)</label>
+                  <textarea name="message" rows="3" placeholder="Tell us more about your inquiry..."></textarea>
+                </div>
+                <button type="submit" className="btn btn-primary btn-large btn-block">Schedule a Call</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ── */}
+      <section className="faq-section" id="faqs">
+        <div className="container">
+          <div className="faq-header">
+            <h2 className="faq-main-title">Questions? We've Thought About Them.</h2>
+            <p className="faq-subtitle">Everything you need to know, for parents, educators, and franchise partners.</p>
+          </div>
+          <div className="faq-category">
+            <h3 className="faq-category-title">Questions for Parents</h3>
+            <div className="faq-two-column">
+              <div className="faq-column">
+                <FaqItem question="What age groups do you accept?" answer="We accept children from 2 to 6 years old, with specialized programs for each age group." />
+                <FaqItem question="What is your student-teacher ratio?" answer="We maintain a low student-teacher ratio of 10:1 to ensure personalized attention for every child." />
+                <FaqItem question="What curriculum do you follow?" answer="We follow a research-backed curriculum combining STEAM discovery, literacy & language, and numeracy skills pathways tailored to each age group." />
+              </div>
+              <div className="faq-column">
+                <FaqItem question="What are your operating hours?" answer="We operate Monday to Saturday from 9:00 AM to 5:30 PM, with flexible timing options available to suit your needs." />
+                <FaqItem question="Do you provide transportation?" answer="Yes, we provide safe and reliable transportation services with trained staff and GPS-enabled vehicles." />
+                <FaqItem question="How do you ensure child safety?" answer="We maintain strict safety protocols including CCTV monitoring, secure premises, background-checked staff, and regular safety drills." />
+              </div>
+            </div>
+          </div>
+          <div className="faq-category">
+            <h3 className="faq-category-title">Questions for Franchise Partners</h3>
+            <div className="faq-two-column">
+              <div className="faq-column">
+                <FaqItem question="What is the initial investment to start a FermontKIDS franchise?" answer="Our initial investment range is ₹30-50 lakh in India, depending on location and center size." />
+                <FaqItem question="How does FermontKIDS maintain consistency across centres?" answer="We use standardized curriculum, unified training programs, AI-enabled monitoring systems, and regular quality audits." />
+                <FaqItem question="What space requirements are needed for a franchise?" answer="We recommend a minimum of 2,000-3,000 sq ft for a standard center, with adequate outdoor play area." />
+              </div>
+              <div className="faq-column">
+                <FaqItem question="What kind of support do you provide to franchisees?" answer="We provide comprehensive training, curriculum materials, AI-powered operational systems, marketing support, and ongoing guidance." />
+                <FaqItem question="What is the expected return on investment?" answer="Franchise partners typically see a break-even period of 18-24 months and an expected ROI of 25-35% annually." />
+                <FaqItem question="Do you provide technology and AI support?" answer="Yes, our AI-powered platform handles parent communication, scheduling, lead management, and administrative tasks — all included in your franchise package." />
+              </div>
+            </div>
+          </div>
+          <div className="faq-footer">
+            <p>Don't see your question? <a href="#contact" onClick={(e) => handleNavClick(e, '#contact')}>Contact us for quick assistance.</a></p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer className="footer" id="contact">
+        <div className="container">
+          <div className="footer-grid">
+            <div className="footer-col footer-col-main">
+              <img src="/fermontlogo.png" alt="Fermont Kids" className="footer-logo" />
+              <p>Premium early education thoughtfully designed for children aged 2-6 years.</p>
+              <div className="footer-phone">
+                <p>Customer Support</p>
+                <h3>+91 97100 01010</h3>
+                <p>9AM to 5PM (India)</p>
+              </div>
+            </div>
+            <div className="footer-col">
+              <h4>About</h4>
+              <ul>
+                <li><a href="/about">Why FermontKIDS?</a></li>
+                <li><a href="#programs" onClick={(e) => handleNavClick(e, '#programs')}>Learning Approach</a></li>
+                <li><a href="/about">Educational Philosophy</a></li>
+                <li><a href="/founders-desk">Founder's Desk</a></li>
+              </ul>
+            </div>
+            <div className="footer-col">
+              <h4>Help</h4>
+              <ul>
+                <li><a href="#faqs" onClick={(e) => handleNavClick(e, '#faqs')}>FAQ</a></li>
+                <li><a href="#franchise" onClick={(e) => handleNavClick(e, '#franchise')}>Partner With Us</a></li>
+              </ul>
+            </div>
+            <div className="footer-col">
+              <h4>Contact Us</h4>
+              <div className="footer-contact-item"><p className="contact-label">Admissions</p><a href="mailto:admission@fermontkids.com">admission@fermontkids.com</a></div>
+              <div className="footer-contact-item"><p className="contact-label">Franchise</p><a href="mailto:franchise@fermontkids.com">franchise@fermontkids.com</a></div>
+              <div className="footer-contact-item"><p className="contact-label">General</p><a href="mailto:contact@fermontkids.com">contact@fermontkids.com</a></div>
+            </div>
+            <div className="footer-col">
+              <h4>Social Media</h4>
+              <div className="social-links">
+                <a href="#" className="social-link">Instagram</a>
+                <a href="#" className="social-link">Facebook</a>
+              </div>
+            </div>
+          </div>
+          <div className="footer-bottom">
+            <p>© 2025 Fermont School. All rights reserved</p>
+            <div className="footer-links">
+              <a href="#">Privacy Policy</a>
+              <a href="#">Terms of Business</a>
+              <a href="#">Refund Policy</a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+export default MainPage;
